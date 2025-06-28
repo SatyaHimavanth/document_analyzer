@@ -1,5 +1,4 @@
-from models import UserModel, FileModel, FileFiltersModel
-from pdf_to_image.pdf_to_image import convert_pdf_to_images
+from models import UserModel, FileModel, FileFiltersModel, InsertUserFileModel
 from MongoDB.database import (
     user_authenticate, 
     insert_user, 
@@ -7,12 +6,12 @@ from MongoDB.database import (
     get_user_files, 
     update_user_file,
     check_mongodb_connection
-    )
+)
 from constants import UPLOAD_DIR, SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REMEMBER_ACCESS_TOKEN_EXPIRE_MINUTES
+from Validations.validate_forms import validation_functions
+from Text_extraction.extract_data import document_classification, extract_json
 
-from Text_extraction.google_llm import document_classification, extract_json
-
-from fastapi import FastAPI, File, UploadFile, Depends, HTTPException, status, Security
+from fastapi import FastAPI, File, UploadFile, HTTPException, status, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, APIKeyHeader
 from jose import JWTError, jwt
@@ -30,6 +29,7 @@ load_dotenv()
 
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 
 check_mongodb_connection()
 
@@ -147,16 +147,24 @@ async def upload_files(
 
             # extracted_text = await get_file_content(file_location)
             document_classification_result = await document_classification(file_location)
-            print(document_classification_result)
+            
             document_type = document_classification_result.get("document_type")
+            print(document_type)
+
             if not document_type:
                 # return {"status": "partial success", "error": "Document type could not be classified."}
-                extracted_text = {}
+                extracted_text = document_classification_result.get("extracted_text", "")
             else:
                 extracted_text = await extract_json(
                                     file_location, 
                                     document_type
                                 )
+                valid = validation_functions[document_type](extracted_text)
+            
+                extracted_text["document_status"] = valid["document_status"]
+                issues = valid["issues"]
+                print(issues)
+
 
             file_data = {
                 "file_id": uuid4().hex,
@@ -178,25 +186,43 @@ async def upload_files(
 
 
 @app.post("/re_analyze_file")
-async def re_analyze_file(file_id: str, template_type: str, user_id: str = Security(get_current_user)) -> dict:
+async def re_analyze_file(file_id: str, document_type: str, user_id: str = Security(get_current_user)) -> dict:
     file_data = get_user_files(user_id, {"file_id": file_id})
+    print(file_data)
     if not file_data:
         return {"error": "File not found."}
 
     file_path = file_data[0]["file_path"]
-    extracted_text = await extract_json(file_path, template_type)
+    extracted_text = await extract_json(file_path, document_type)
+    
+    valid = validation_functions[document_type](extracted_text)
+            
+    extracted_text["document_status"] = valid["document_status"]
+    issues = valid["issues"]
+    print(issues)
     if not extracted_text:
         return {"error": "Failed to extract text from the file."}
     
-    return {"status": "success", "reanalyzed_data": extracted_text}
+    response_data = FileModel(file_id=file_id, upload_date=file_data[0]["upload_date"],
+                              filename=file_data[0]["filename"], file_path=file_data[0]["file_path"],
+                              document_type=document_type, extracted_text=extracted_text,
+                              content_type=file_data[0]["content_type"])
+    
+    user_data = {
+        "user_id": user_id,
+        "files": [response_data.model_dump()]
+    }
+    return {"status": "success", "extracted_data": user_data}
 
 
 @app.post("/update_file_data")
-async def update_file_data(file_id: str, file_data: FileModel, user_id: str = Security(get_current_user)) -> dict:
-    if not file_data.id or not file_data.message:
+async def update_file_data(file_data: InsertUserFileModel, user_id: str = Security(get_current_user)) -> dict:
+    if not file_data.user_id or not file_data.files:
         return {"error": "Invalid data provided."}
     
-    result = update_user_file(user_id, file_id, file_data.model_dump())
+    total_data = file_data.model_dump()
+    
+    result = update_user_file(user_id, total_data["files"][0]["file_id"], total_data["files"][0])
     if result:
         return {"status": "success", "message": "File data updated successfully."}
     

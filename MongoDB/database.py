@@ -101,7 +101,7 @@ def insert_user(user_data: UserModel) -> dict:
     return {"status": "success", "user_id": user_id}
 
 
-def insert_user_file(user_data: InsertUserFileModel) -> dict:
+def insert_user_file(user_data: dict) -> dict:
     """
     Inserts user data into the MongoDB collection.
     :param user_data: Dictionary containing user data to be inserted.
@@ -176,7 +176,9 @@ def get_user_files(user_id: str, filters: FileFiltersModel = None) -> list[dict]
                     if filter_key in file_keys and filters[filter_key].strip():
                         query[filter_key] = filters[filter_key].strip() if isinstance(filters[filter_key], str) else filters[filter_key]
 
-            files = list(data_collection.find(query, {"file_id": 1, "upload_date": 1, "filename": 1, "template_type":1, "_id": 0}))
+            return_keys = {"file_id": 1, "upload_date": 1, "filename": 1,
+                           "document_type":1, "file_path": 1, "content_type": 1, "_id": 0}
+            files = list(data_collection.find(query, return_keys))
             return files
     except Exception as e:
         print(f"Error retrieving user files: {e}")
