@@ -1,14 +1,3 @@
-TEXT_EXTRACTION_PROMPT = """You are a highly skilled text extraction model.
-Your task is to extract relevant information from the provided file.
-"""
-
-PARSING_PROMPT = """You are an expert in extracting information from text. 
-Your task is to extract specific details from the provided text. 
-The text may contain various types of information, including but not limited to
-names, dates, locations, and other relevant data."""
-
-
-
 document_classification_prompt = """
 You are an expert in extracting text and analyzing official documents from police departments and other administrative sources.
 
@@ -66,12 +55,14 @@ DOCUMENT_DESCRIPTION = {
 "PunishmentLetter": "It contains R.C No followed By D.O No and date. It describes the punishment awarded and officer sign who awarded the punishment.",
 "EarnedLeaveLetter": "It contails R.C No followed by HOD No and date. It is of a format mail with Subject, Reference and Order each containing crutial information. At last it is stamped (with details like officer position, location and rank) and addressed to higher officer followed by Administrative officer sign.",
 "RewardLetter": "It consists of R.C No, H O O No followed by Date an stamp. Order details start: First Subject followed by Reference with order no. Next it contains Rewards awarded to officers along with their ranks. At last signed by HOD along with location and To address",
-"MedicalLeave": "It starts with a stamp containing unit, district followed by rank, coy and address. Next Subject and Reason for Leave. Next it is addressed to Higher officier along with sigh of officer with date.",
+"MedicalLeave": "You are analyzing a Medical Leave document that typically starts with a stamp containing the unit, district, rank, coy, and address, followed by the subject and reason for leave. The letter is addressed to a higher officer and ends with the signature of the officer and the date. Your task is to extract structured information from the text, especially the district. Only the following are valid districts and should be extracted if present: Srikakulam, Kurnool, Kakinada, Rajamahendm, Vizianagar, Mangalagir, Ongole, Chittoor, Venkatagir, Kadapa, Ananthapur, and Vishakapat. Do not consider any other city or region as a district if it is not in this list. Extract date from stamp",
 "ProbationLetter": """
         The document is structured into two main parts:
 
         Page 1, you'll find the "Register of Probationer" which provides administrative information such as his service class category , name , date of regularization , prescribed probation period , and the official completion date of his probation. This page also lists any leave taken , tests to be passed , punishments , pending inquiries , and character and conduct assessment. Remarks from the I/C Officer , Commandant , and DIG  regarding his probation completion are also present here, culminating in the orders from the Addl. Director General of Police.
 
         Pages 2 and 3 comprise "FORM - A," a Probation Special Confidential Report. Here, you can find personal details like his date of birth , salary information , and qualifications. This section also details the acceptance of his self-appraisal report and an assessment of his performance during the year. The document concludes with the reporting officer's details (name, designation, and date) , the countersigning officer's remarks (including their name, designation, and date) , and the final opinion of the Head of the Department, including their signature, name, designation, and the date the probation was declared
+
+        Counter sigining officer details will be on the stamp or near stamp in handwritten or Machine text.
     """
 }

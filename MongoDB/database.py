@@ -41,11 +41,14 @@ def check_mongodb_connection():
 
 
 
-def user_exists(user_id: str) -> bool:
+def user_exists(user_name: str) -> bool:
+    """
+    This function is used to check whether a user with User_name Exists.
+    """
     with MongoClient(MONGODB_URI) as client:
         db = client[DATABASE_NAME]
         users_collection = db[USER_COLLECTION_NAME]
-        user = users_collection.find_one({"user_id": user_id.strip()})
+        user = users_collection.find_one({"user_name": user_name.strip()})
         if user:
             return True
         return False
@@ -83,6 +86,9 @@ def insert_user(user_data: UserModel) -> dict:
 
     try:
         with MongoClient(MONGODB_URI) as client:
+            if user_exists(name.strip()):
+                return {"status": "error", "message": "User with given Name already exists."}
+
             db = client[DATABASE_NAME]
             users_collection = db[USER_COLLECTION_NAME]
 
@@ -179,7 +185,50 @@ def get_user_files(user_id: str, filters: FileFiltersModel = None) -> list[dict]
             return_keys = {"file_id": 1, "upload_date": 1, "filename": 1,
                            "document_type":1, "file_path": 1, "content_type": 1, "_id": 0}
             files = list(data_collection.find(query, return_keys))
-            return files
+            
+            return files[::-1]
+    except Exception as e:
+        print(f"Error retrieving user files: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+def get_file_data(user_id: str, file_id: str) -> dict:
+    try:
+        with MongoClient(MONGODB_URI) as client:
+            db = client[DATABASE_NAME]
+            data_collection = db[DATA_COLLECTION_NAME]
+
+            query = {"user_id": user_id, "file_id": file_id}
+            
+            file = data_collection.find_one(query)
+            file.pop("_id")
+            return file
+    except Exception as e:
+        print(f"Error retrieving user files: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+def get_all_users_files() -> list[dict]:
+    try:
+        with MongoClient(MONGODB_URI) as client:
+            db = client[DATABASE_NAME]
+            users = db[USER_COLLECTION_NAME]
+            user_map = {
+                user["user_id"]: user["name"]
+                for user in users.find({}, {"user_id": 1, "name": 1})
+            }
+            data_collection = db[DATA_COLLECTION_NAME]
+
+            updated_docs = []
+            for doc in data_collection.find():
+                user_name = user_map.get(doc["user_id"], "Unknown")
+                doc["user_name"] = user_name
+                del doc["user_id"]
+                del doc["_id"]
+                del doc["extracted_text"]
+                updated_docs.append(doc)
+            
+            return updated_docs
     except Exception as e:
         print(f"Error retrieving user files: {e}")
         return {"status": "error", "message": str(e)}

@@ -43,7 +43,7 @@ def validate_earned_leave_letter(data: dict) -> dict:
 
     # 6. Number of Days
     no_of_days = data.get("no_of_days", {}).get("extracted_text", "")
-    if not no_of_days.isdigit() or int(no_of_days) <= 0:
+    if int(no_of_days) <= 0:
         issues.append("Invalid or missing Number of Days.")
 
     # 7. Leave From Date
@@ -127,10 +127,10 @@ def validate_punishment_letter(data: dict) -> dict:
     unit_pattern = r'\b(?:' + '|'.join(re.escape(unit) for unit in LIST_OF_UNITS_DISTRICTS.keys()) + r')\b'
     district_pattern = r'\b(?:' + '|'.join(re.escape(dist) for dist in LIST_OF_UNITS_DISTRICTS.values()) + r')\b'
 
-    has_rank = re.search(rank_pattern, issued_by_text, re.IGNORECASE)
+    # has_rank = re.search(rank_pattern, issued_by_text, re.IGNORECASE)
     has_unit_or_district = re.search(unit_pattern, issued_by_text, re.IGNORECASE) or \
                            re.search(district_pattern, issued_by_text, re.IGNORECASE)
-    if not has_rank or not has_unit_or_district:
+    if not has_unit_or_district:
         issues.append("Invalid or missing Issued By (designation expected).")
 
     # 7. Issued Date
@@ -176,12 +176,12 @@ def validate_reward_letter(data: dict) -> dict:
     # Issued By validation (basic: must include a designation and location)
     issued_by = data.get("issued_by", {}).get("extracted_text", "")
     
-    rank_pattern = r'\b(?:' + '|'.join(re.escape(rank) for rank in LIST_OF_RANKS.keys()) + r')\b'
-    has_rank = re.search(rank_pattern, issued_by, re.IGNORECASE)
-    office_pattern = r'\b(?:' + '|'.join(re.escape(keyword) for keyword in OFFICE_KEYWORDS) + r')\b'
-    has_office = re.search(office_pattern, issued_by, re.IGNORECASE)
+    # rank_pattern = r'\b(?:' + '|'.join(re.escape(rank) for rank in LIST_OF_RANKS.keys()) + r')\b'
+    # has_rank = re.search(rank_pattern, issued_by, re.IGNORECASE)
+    # office_pattern = r'\b(?:' + '|'.join(re.escape(keyword) for keyword in OFFICE_KEYWORDS) + r')\b'
+    # has_office = re.search(office_pattern, issued_by, re.IGNORECASE)
 
-    if not has_rank or not has_office:
+    if not issued_by:
         issues.append("Invalid or missing Issued By field.")
 
     # Subject
@@ -227,24 +227,28 @@ def validate_medical_leave(data: dict) -> dict:
 
     # 2. Date of Submission (format DD-MM-YYYY)
     date_str = data.get("date_of_submission", {}).get("extracted_text", "")
-    def is_valid_date(d):
-        for fmt in ("%d-%m-%Y"):
+    def is_valid_date(date_str):
+        formats = ["%d/%m/%y", "%d-%m-%Y", "%d-%m-%y", "%d/%m/%Y"]
+        for fmt in formats:
             try:
-                return datetime.strptime(d, fmt)
+                datetime.strptime(date_str.strip(), fmt)
+                return True
             except:
                 continue
-        return None
+        return False
+
     if not is_valid_date(date_str):
         issues.append("Invalid or missing Date of Submission.")
 
     # 3. Coy Belongs to
     coy = data.get("coy_belongs_to", {}).get("extracted_text", "")
-    if not coy or not coy not in LIST_OF_COYS:
+    if not coy or coy.strip() not in LIST_OF_COYS:
+        print(coy, LIST_OF_COYS)
         issues.append("Invalid or missing Coy Belongs to.")
 
     # 4. Rank
     rank = data.get("rank", {}).get("extracted_text", "")
-    if not rank or rank not in LIST_OF_RANKS.keys() or rank not in LIST_OF_RANKS.values():
+    if not rank or (rank not in LIST_OF_RANKS.keys() and rank not in LIST_OF_RANKS.values()):
         issues.append("Invalid or missing Rank.")
 
     # 5. Leave Reason
@@ -258,12 +262,11 @@ def validate_medical_leave(data: dict) -> dict:
         issues.append("Invalid or missing Phone Number.")
 
     # 7. Unit and District
-    unit_data = data.get("unit_and_district", {})
-    unit = unit_data.get("unit", {}).get("extracted_text", "")
-    district = unit_data.get("district", {}).get("extracted_text", "")
-    
-    if not unit or unit not in LIST_OF_UNITS_DISTRICTS.keys() or not district or district not in LIST_OF_UNITS_DISTRICTS.values():
+    unit_and_district = data.get("unit_and_district", {}).get("validation", "")
+
+    if not unit_and_district or unit_and_district == "InValid":
         issues.append("Missing Unit and/or District in Unit and District field.")
+
 
     # Final decision
     status = "Valid" if not issues else "InValid"
@@ -299,13 +302,13 @@ def validate_probation_letter(data: dict) -> dict:
 
     #1 . service_class_category
     service_class_category = data.get("service_class_category", {}).get("extracted_text", "")
-    if not service_class_category or service_class_category not in LIST_OF_RANKS.keys() or service_class_category not in LIST_OF_RANKS.values() :
+    if not service_class_category:
         issues.append("Missing service class category Reason.")
 
     # 2. Name of Probationer
     name = data.get("name_of_probationer", {}).get("extracted_text")
     if not name:
-        issues.append("Missing required field")
+        issues.append("Missing Name field")
     elif not re.match(r'^[A-Z][a-zA-Z]*\.?[ ]?[A-Z][a-zA-Z]+$', name):
         issues.append("Invalid name format (only alphabets and initials allowed)") 
 
@@ -382,7 +385,7 @@ def validate_probation_letter(data: dict) -> dict:
 
     # 17. Salary
     salary = data.get("salary", {}).get("extracted_text", "")
-    if not salary or not re.match(r"^\d+(\.\d+)?$", salary):
+    if not salary or not salary.isdigit():
         issues.append("Invalid or missing Salary.")
 
     # 18. Qualification
@@ -443,6 +446,23 @@ def validate_probation_letter(data: dict) -> dict:
         issues.append("Invalid or missing Head of Department Name.")
     if not hod_designation:
         issues.append("Missing Head of Department Designation.")
+
+    sign1 = data.get("stamp1", {}).get("extracted_text", False)
+    sign2 = data.get("stamp2", {}).get("extracted_text", False)
+    sign3 = data.get("stamp3", {}).get("extracted_text", False)
+    sign4 = data.get("stamp4", {}).get("extracted_text", False)
+    sign5 = data.get("stamp5", {}).get("extracted_text", False)
+    if not sign1:
+        issues.append("Sign 1 is Missing")
+    if not sign2:
+        issues.append("Sign 2 is Missing")
+    if not sign3:
+        issues.append("Sign 3 is Missing")
+    if not sign4:
+        issues.append("Sign 4 is Missing")
+    if not sign5:
+        issues.append("Sign 5 is Missing")
+
 
     status = "Valid" if not issues else "InValid"
 

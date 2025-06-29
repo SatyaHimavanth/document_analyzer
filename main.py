@@ -1,16 +1,19 @@
-from models import UserModel, FileModel, FileFiltersModel, InsertUserFileModel
+from models import UserModel, FileModel, FileFiltersModel, InsertUserFileModel, LoginModel
 from MongoDB.database import (
     user_authenticate, 
     insert_user, 
     insert_user_file, 
     get_user_files, 
     update_user_file,
-    check_mongodb_connection
+    check_mongodb_connection,
+    get_file_data,
+    get_all_users_files
 )
 from constants import UPLOAD_DIR, SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REMEMBER_ACCESS_TOKEN_EXPIRE_MINUTES
 from Validations.validate_forms import validation_functions
 from Text_extraction.extract_data import document_classification, extract_json
 
+from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI, File, UploadFile, HTTPException, status, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, APIKeyHeader
@@ -38,10 +41,11 @@ app = FastAPI()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 api_key_header = APIKeyHeader(name="Authorization")
 
+app.mount("/uploads", StaticFiles(directory="uploads"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # or restrict to ["http://localhost:8080"]
+    allow_origins=["http://localhost:5173"],  # or restrict to ["http://localhost:8080"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -93,26 +97,38 @@ def get_current_user(token: str = Security(auth_header)) -> str:
     return user_id
 
 
+def is_admin(user_id) -> bool:
+    if user_id == "aff518bdab284d00bca61c0e9509856f":
+        return True
+    return False
+
 
 @app.post("/login")
-async def login(user_name: str, password: str, remember_me: bool) -> dict:
+async def login(logindetails: LoginModel) -> dict:
+    user_name = logindetails.user_name
+    password = logindetails.password
+    remember_me = logindetails.remember_me
     hashed_password = hash_password(password)
     print(user_name, hashed_password)
     user = user_authenticate(user_name, hashed_password)
     print(user)
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
-    
+
     data={"sub": user["user_data"]["user_id"]}
     access_token = create_access_token(data)
     if remember_me:
         access_token = create_access_token(data, timedelta(minutes=REMEMBER_ACCESS_TOKEN_EXPIRE_MINUTES))
 
+    user_type = "user"
+    if is_admin(user["user_data"]["user_id"]):
+        user_type = "admin"
     return {
         "status": "success",
         "user_data": {"user_id": user["user_data"]["user_id"], "name": user["user_data"]["name"], "email": user["user_data"]["email"]},
         "access_token": access_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "user_type": user_type
     }
 
 
@@ -136,7 +152,7 @@ async def upload_files(
         "user_id": user_id,
         "files": []
     }
-
+    issues_in_documents = []
     try:
         for file in files:
             file_location = os.path.join(UPLOAD_DIR, user_id, file.filename)
@@ -159,11 +175,12 @@ async def upload_files(
                                     file_location, 
                                     document_type
                                 )
+                print(extracted_text)
                 valid = validation_functions[document_type](extracted_text)
             
                 extracted_text["document_status"] = valid["document_status"]
-                issues = valid["issues"]
-                print(issues)
+                issues_in_documents = valid["issues"]
+                print(issues_in_documents)
 
 
             file_data = {
@@ -178,7 +195,7 @@ async def upload_files(
             user_data["files"].append(file_data)
 
         result = insert_user_file(user_data)
-        return {"status": "success", "extracted_data": user_data}
+        return {"status": "success", "extracted_data": user_data, "issues_in_documents": issues_in_documents}
     
     except Exception as e:
         print(f"Error uploading files: {e}")
@@ -198,8 +215,8 @@ async def re_analyze_file(file_id: str, document_type: str, user_id: str = Secur
     valid = validation_functions[document_type](extracted_text)
             
     extracted_text["document_status"] = valid["document_status"]
-    issues = valid["issues"]
-    print(issues)
+    issues_in_documents = valid["issues"]
+    print(issues_in_documents)
     if not extracted_text:
         return {"error": "Failed to extract text from the file."}
     
@@ -212,7 +229,7 @@ async def re_analyze_file(file_id: str, document_type: str, user_id: str = Secur
         "user_id": user_id,
         "files": [response_data.model_dump()]
     }
-    return {"status": "success", "extracted_data": user_data}
+    return {"status": "success", "extracted_data": user_data, "issues_in_documents": issues_in_documents}
 
 
 @app.post("/update_file_data")
@@ -228,6 +245,13 @@ async def update_file_data(file_data: InsertUserFileModel, user_id: str = Securi
     
     return {"error": "Failed to update file data."}
 
+@app.post("/get_all_files")
+async def get_all_files(user_id: str = Security(get_current_user)) -> List[dict]:
+    if is_admin(user_id):
+        return get_all_users_files()
+    else:
+        return {"status": "error"}
+
 
 @app.post("/get_files")
 async def get_files(user_id: str = Security(get_current_user), filters: FileFiltersModel | None = None) -> List[dict] | dict:
@@ -237,6 +261,17 @@ async def get_files(user_id: str = Security(get_current_user), filters: FileFilt
     return get_user_files(user_id)
 
 
+@app.post("/get_file")
+async def get_file(file_id: str, user_id: str = Security(get_current_user)) -> dict:
+    data = get_file_data(user_id, file_id)
+    document_type = data["document_type"]
+    extracted_text = data["extracted_text"]
+    valid = validation_functions[document_type](extracted_text)
+    extracted_text["document_status"] = valid["document_status"]
+    data["issues_in_documents"] = valid["issues"]
+
+    return data
+
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8010, reload=True)

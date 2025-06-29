@@ -71,7 +71,7 @@ def load_file_as_base64(path: str) -> dict:
                 }
             })
     return message_content
-    
+
 
 
 async def document_classification(doc_path: str) -> dict:
