@@ -1,0 +1,30 @@
+Use case Members:
+
+use case lead : M Vamsi
+Phone Number: 9985062444
+
+use case member: M Aravind Kumar
+Phone Number: 9515574466
+
+
+
+
+->We have provided the list stamps in the "master stamp list" folder.
+
+->We have provided the Master Districts & Units & other Tables(Ranks,list of coys,list of Section codes) in an excel named "Master Districts & Units & other Tables"
+	-- We have provided all the tables in that one excel divided into sheets those are named as:
+
+		-- List of coys
+		-- List of ranks
+		-- List of Units & districts
+		-- List of section codes
+->Inside the "DOCUMENT INFORMATION TEMPLATES" folder we have placed 5 different folders those are named as Earned Leave Letter,Medical Leave Letter, Punishment Letter, Probation Letter, Reward Letter. 
+	-> In each folder we have placed respective documents:
+		-- Expected Output format
+		-- Required Validation fields
+		-- Input data(images/pdf)
+
+
+
+Note: we have replaced the 4th point(Sample Scanned Pdfs) in Master data with dummy stamps and the 5th point is related input data which is provided in "DOCUMENT INFORMATION TEMPLATES".
+      we have also placed the Expected Outcomes in "DOCUMENT INFORMATION TEMPLATES".
